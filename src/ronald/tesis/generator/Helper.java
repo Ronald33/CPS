@@ -30,10 +30,10 @@ public abstract class Helper extends ronald.tesis.helper.Helper
 	
 	public static ArrayList<String> jobs = new ArrayList<>(Arrays.asList("grep", "kmeans", "pi", "sort", "validate", "wordcount"));
 	
-	public static ArrayList<String> getNameJobs(int size_jobs)
+	public static ArrayList<String> getNameJobs(int min_job_id, int max_job_id)
 	{
 		ArrayList<String> names = new ArrayList<>();
-		for(int i = 0; i < size_jobs; i++) { names.add(Config.nameJob + (i+1)); }
+		for(int i = min_job_id; i <= max_job_id; i++) { names.add(Config.nameJob + (i)); }
 		return names;
 	}
 		

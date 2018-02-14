@@ -46,6 +46,11 @@ public class Comparative
 	private double _avg_error_birch_map;
 	private double _avg_error_birch_reduce;
 	
+	private long _time_birch_map;
+	private long _time_birch_reduce;
+	private long _time_kmeans_map;
+	private long _time_kmeans_reduce;
+	
 	private String _id;
 	private int _numberOfTasksMap;
 	private int _numberOfTasksReduce;
@@ -147,6 +152,11 @@ public class Comparative
 		this._kmeans_map.execute(collect_maps_1d);
 		this._kmeans_reduce = new KMeans();
 		this._kmeans_reduce.execute(collect_reduces_2d);
+		// Save times
+		this._time_birch_map = this._birch_map.getTime();
+		this._time_birch_reduce = this._birch_reduce.getTime();
+		this._time_kmeans_map = this._kmeans_map.getTime();
+		this._time_kmeans_reduce = this._kmeans_reduce.getTime();
 	}
 	
 	public void fillIndexHistoricalFiles(int historical_size) throws Exception
@@ -364,21 +374,32 @@ public class Comparative
 	public double getAverageErrorBirchMap() { return this._avg_error_birch_map; }
 	public double getAverageErrorBirchReduce() { return this._avg_error_birch_reduce; }
 	
-	public static void multiTest(String path, int repetitions, Comparative comparatives[]) throws Exception
+	public static void multiTest(String path, int repetitions, int historicals[], int tests[], int min_ids[], int max_ids[], 
+			int tasks_map[], int tasks_reduce[], ArrayList<ArrayList<String>> jobs, int Bs_map[], int Ls_map[], double Ts_map[], 
+			int Bs_reduce[], int Ls_reduce[], double Ts_reduce[]) throws Exception
 	{
 		String _path = Config.folder_results + "/" + path;
-		int length = comparatives.length;
+		int length = historicals.length;
 		double results_map[][] = new double[_schedulers_size][length];
 		double results_reduce[][] = new double[_schedulers_size][length];
-				
+		double time_results_map[][] = new double[_schedulers_size - 1][length];
+		double time_results_reduce[][] = new double[_schedulers_size - 1][length];
+
 		for(int i = 0; i < length; i++)
 		{
 			System.out.println("i: " + i);
-			double late_map = 0, late_reduce = 0, esamr_map = 0, esamr_reduce = 0, birch_map = 0, birch_reduce = 0; 
+			double late_map = 0, late_reduce = 0, esamr_map = 0, esamr_reduce = 0, birch_map = 0, birch_reduce = 0;
+			long total_time_kmeans_map = 0, total_time_kmeans_reduce = 0, total_time_birch_map = 0, total_time_birch_reduce = 0;
 			for(int j = 0; j < repetitions; j++)
 			{
 				System.out.print(j + " ");
-				Comparative comparative = comparatives[i];
+				Comparative comparative = new Comparative(historicals[i], tests[i], min_ids[i], max_ids[i], tasks_map[i], tasks_reduce[i], jobs.get(i));
+				comparative.setTMap(Ts_map[i]);
+				comparative.setBMap(Bs_map[i]);
+				comparative.setLMap(Ls_map[i]);
+				comparative.setTReduce(Ts_reduce[i]);
+				comparative.setBReduce(Bs_reduce[i]);
+				comparative.setLReduce(Ls_reduce[i]);
 				comparative.test();
 				late_map +=  comparative.getAverageErrorLateMap();
 				esamr_map +=  comparative.getAverageErrorEsamrMap();
@@ -386,21 +407,92 @@ public class Comparative
 				late_reduce +=  comparative.getAverageErrorLateReduce();
 				esamr_reduce +=  comparative.getAverageErrorEsamrReduce();
 				birch_reduce +=  comparative.getAverageErrorBirchReduce();
-//				comparative.saveClusteringTechniques(path + "/" + comparative.getId() + "_" + j);
+				
+				total_time_kmeans_map += comparative.getTimeKmeansMap();
+				total_time_kmeans_reduce += comparative.getTimeKmeansReduce();
+				total_time_birch_map += comparative.getTimeBIRCHMap();
+				total_time_birch_reduce += comparative.getTimeBIRCHReduce();
 			}
 			System.out.println();
-			results_map[0][i] = late_map / repetitions;
-			results_map[1][i] = esamr_map / repetitions;
-			results_map[2][i] = birch_map / repetitions;
-			results_reduce[0][i] = late_reduce / repetitions;
-			results_reduce[1][i] = esamr_reduce / repetitions;
-			results_reduce[2][i] = birch_reduce / repetitions;;
+			results_map[0][i] = 100 - (late_map / repetitions);
+			results_map[1][i] = 100 - (esamr_map / repetitions);
+			results_map[2][i] = 100 - (birch_map / repetitions);
+			results_reduce[0][i] = 100 - (late_reduce / repetitions);
+			results_reduce[1][i] = 100 - (esamr_reduce / repetitions);
+			results_reduce[2][i] = 100 - (birch_reduce / repetitions);
+			
+			time_results_map[0][i] = total_time_kmeans_map / repetitions;
+			time_results_map[1][i] = total_time_birch_map / repetitions;
+			time_results_reduce[0][i] = total_time_kmeans_reduce / repetitions;
+			time_results_reduce[1][i] = total_time_birch_reduce / repetitions;
 		}
 		
 		Helper.createFolder(_path);
-		Helper.writeFile(_path + "/map", Helper.arrayToCSV(results_map));
-		Helper.writeFile(_path + "/reduce", Helper.arrayToCSV(results_reduce));
+		Helper.writeFile(_path + "/map.txt", Helper.arrayToCSV(results_map));
+		Helper.writeFile(_path + "/reduce.txt", Helper.arrayToCSV(results_reduce));
+		
+		Helper.writeFile(_path + "/time_map.txt", Helper.arrayToCSV(time_results_map));
+		Helper.writeFile(_path + "/time_reduce.txt", Helper.arrayToCSV(time_results_reduce));
 	}
+//	public static void multiTest(String path, int repetitions, Comparative comparatives[]) throws Exception
+//	{
+//		String _path = Config.folder_results + "/" + path;
+//		int length = comparatives.length;
+//		double results_map[][] = new double[_schedulers_size][length];
+//		double results_reduce[][] = new double[_schedulers_size][length];
+//		double time_results_map[][] = new double[_schedulers_size - 1][length]; // Withouth time
+//		double time_results_reduce[][] = new double[_schedulers_size - 1][length];
+//				
+//		for(int i = 0; i < length; i++)
+//		{
+//			System.out.println("i: " + i);
+//			double late_map = 0, late_reduce = 0, esamr_map = 0, esamr_reduce = 0, birch_map = 0, birch_reduce = 0;
+//			long total_time_kmeans_map = 0, total_time_kmeans_reduce = 0, total_time_birch_map = 0, total_time_birch_reduce = 0;
+//			for(int j = 0; j < repetitions; j++)
+//			{
+//				if(j == 1)
+//				{
+//					System.out.println("Entre");
+//				}
+//				System.out.print(j + " ");
+//				Comparative comparative = comparatives[i];
+//				comparative.test();
+//				late_map +=  comparative.getAverageErrorLateMap();
+//				esamr_map +=  comparative.getAverageErrorEsamrMap();
+//				birch_map +=  comparative.getAverageErrorBirchMap();
+//				late_reduce +=  comparative.getAverageErrorLateReduce();
+//				esamr_reduce +=  comparative.getAverageErrorEsamrReduce();
+//				birch_reduce +=  comparative.getAverageErrorBirchReduce();
+//				
+//				total_time_kmeans_map += comparative.getTimeKmeansMap();
+//				total_time_kmeans_reduce += comparative.getTimeKmeansReduce();
+//				total_time_birch_map += comparative.getTimeBIRCHMap();
+//				total_time_birch_reduce += comparative.getTimeBIRCHReduce();
+////				System.out.println("total_time_birch_map: " + total_time_birch_map);
+////				System.out.println("total_time_birch_reduce: " + total_time_birch_reduce);
+////				comparative.saveClusteringTechniques(path + "/" + comparative.getId() + "_" + j);
+//			}
+//			System.out.println();
+//			results_map[0][i] = late_map / repetitions;
+//			results_map[1][i] = esamr_map / repetitions;
+//			results_map[2][i] = birch_map / repetitions;
+//			results_reduce[0][i] = late_reduce / repetitions;
+//			results_reduce[1][i] = esamr_reduce / repetitions;
+//			results_reduce[2][i] = birch_reduce / repetitions;;
+//			
+//			time_results_map[0][i] = total_time_kmeans_map / repetitions;
+//			time_results_map[1][i] = total_time_birch_map / repetitions;
+//			time_results_reduce[0][i] = total_time_kmeans_reduce / repetitions;
+//			time_results_reduce[1][i] = total_time_birch_reduce / repetitions;
+//		}
+//		
+//		Helper.createFolder(_path);
+//		Helper.writeFile(_path + "/map.txt", Helper.arrayToCSV(results_map));
+//		Helper.writeFile(_path + "/reduce.txt", Helper.arrayToCSV(results_reduce));
+//		
+//		Helper.writeFile(_path + "/time_map.txt", Helper.arrayToCSV(time_results_map));
+//		Helper.writeFile(_path + "/time_reduce.txt", Helper.arrayToCSV(time_results_reduce));
+//	}
 	// Map 8:5, Reduce 4:13
 	public static void findParameters(String path, int repetitions, double Ts_map[], int Bs_map[], int Ls_map[], double Ts_reduce[], int Bs_reduce[], int Ls_reduce[], int historical_size, int tests_size, int min_id, int max_id, int number_of_tasks_map, int number_of_tasks_reduce, ArrayList<String> jobs) throws Exception
 	{
@@ -416,8 +508,10 @@ public class Comparative
 			String id = Helper.getUniqueId();
 			for(int i = 0; i < length; i++)
 			{
+				System.out.println("T_map: " + Ts_map[i]);
 				System.out.println("B_map: " + Bs_map[i]);
 				System.out.println("L_map: " + Ls_map[i]);
+				System.out.println("T_reduce: " + Ts_reduce[i]);
 				System.out.println("B_reduce: " + Bs_reduce[i]);
 				System.out.println("L_reduce: " + Ls_reduce[i]);
 				
@@ -466,5 +560,10 @@ public class Comparative
 	public BIRCH getBIRCHReduce() { return this._birch_reduce; }
 	public KMeans getKMeansMap() { return this._kmeans_map; }
 	public KMeans getMeansReduce() { return this._kmeans_reduce; }
+	
+	public long getTimeBIRCHMap() { return this._time_birch_map; }
+	public long getTimeBIRCHReduce() { return this._time_birch_reduce; }
+	public long getTimeKmeansMap() { return this._time_kmeans_map; }
+	public long getTimeKmeansReduce() { return this._time_kmeans_reduce; }
 	/* End GyS */
 }
