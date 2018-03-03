@@ -10,7 +10,12 @@ import ronald.tesis.point.Point;
 
 public class Comparative
 {
-	private static String[] _schedulers = new String[]{"late", "esamr", "birch"};
+	public static int INDEX_LATE = 0;
+	public static int INDEX_SAMR = 1;
+	public static int INDEX_EMSAR = 2;
+	public static int INDEX_BIRCH = 3;
+	
+	private static String[] _schedulers = new String[]{"late", "samr", "esamr", "birch"};
 	private static int _schedulers_size = _schedulers.length;
 	
 	private int _tests_size;
@@ -34,16 +39,21 @@ public class Comparative
 	
 	private double _avg_error_late_maps[][];
 	private double _avg_error_late_reduces[][];
+	private double _avg_error_samr_maps[][];
+	private double _avg_error_samr_reduces[][];
 	private double _avg_error_esamr_maps[][];
 	private double _avg_error_esamr_reduces[][];
 	private double _avg_error_birch_maps[][];
 	private double _avg_error_birch_reduces[][];
 
 	private double _avg_error_late_map;
+	private double _avg_error_samr_map;
 	private double _avg_error_esamr_map;
-	private double _avg_error_late_reduce;
-	private double _avg_error_esamr_reduce;
 	private double _avg_error_birch_map;
+	
+	private double _avg_error_late_reduce;
+	private double _avg_error_samr_reduce;
+	private double _avg_error_esamr_reduce;
 	private double _avg_error_birch_reduce;
 	
 	private long _time_birch_map;
@@ -63,6 +73,10 @@ public class Comparative
 	private int _L_reduce = ronald.tesis.clustering.birch.Config.L;
 	
 	private ArrayList<String> _jobs;
+	
+	// SAMR
+	private Point _old_map;
+	private Point _old_reduce;
 	
 	public Comparative(int historical_jobs[], int historical_files[], int tests_size, int min_id, int max_id, int number_of_tasks_map, int number_of_tasks_reduce, ArrayList<String> jobs) throws Exception
 	{
@@ -88,6 +102,8 @@ public class Comparative
 		int jobs_size = this._jobs.size();
 		this._avg_error_late_maps = new double[jobs_size][tests_size];
 		this._avg_error_late_reduces = new double[jobs_size][tests_size];
+		this._avg_error_samr_maps = new double[jobs_size][tests_size];
+		this._avg_error_samr_reduces = new double[jobs_size][tests_size];
 		this._avg_error_esamr_maps = new double[jobs_size][tests_size];
 		this._avg_error_esamr_reduces = new double[jobs_size][tests_size];
 		this._avg_error_birch_maps = new double[jobs_size][tests_size];
@@ -148,6 +164,10 @@ public class Comparative
 			this._birch_map.save();
 			this._birch_reduce.save();
 		}
+		// Asignamos los olds para SAMR
+		this._old_map = Helper.getAverage(collect_maps_1d);
+		this._old_reduce = Helper.getAverage(collect_reduces_2d);
+		
 		this._kmeans_map = new KMeans();
 		this._kmeans_map.execute(collect_maps_1d);
 		this._kmeans_reduce = new KMeans();
@@ -254,9 +274,11 @@ public class Comparative
 			}
 		}
 		this._avg_error_late_map = Helper.round(Helper.getAverageMatrix(this._avg_error_late_maps) * 100, Config.number_of_decimals);
+		this._avg_error_samr_map = Helper.round(Helper.getAverageMatrix(this._avg_error_samr_maps) * 100, Config.number_of_decimals);
 		this._avg_error_esamr_map = Helper.round(Helper.getAverageMatrix(this._avg_error_esamr_maps) * 100, Config.number_of_decimals);
 		this._avg_error_birch_map = Helper.round(Helper.getAverageMatrix(this._avg_error_birch_maps) * 100, Config.number_of_decimals);
 		this._avg_error_late_reduce = Helper.round(Helper.getAverageMatrix(this._avg_error_late_reduces) * 100, Config.number_of_decimals);
+		this._avg_error_samr_reduce = Helper.round(Helper.getAverageMatrix(this._avg_error_samr_reduces) * 100, Config.number_of_decimals);
 		this._avg_error_esamr_reduce = Helper.round(Helper.getAverageMatrix(this._avg_error_esamr_reduces) * 100, Config.number_of_decimals);
 		this._avg_error_birch_reduce = Helper.round(Helper.getAverageMatrix(this._avg_error_birch_reduces) * 100, Config.number_of_decimals);
 	}
@@ -267,10 +289,11 @@ public class Comparative
 		WMap wlate = getWeightsMap();
 		WMap wkm = getWeightsMap(reference, this._centroids_kmeans_map);
 		WMap wbirch = getWeightsMap(reference, this._centroids_birch_map);
-		double sum_error_late = 0, sum_error_km = 0, sum_error_birch = 0; 
+		double sum_error_late = 0, sum_error_samr = 0, sum_error_km = 0, sum_error_birch = 0; 
 		ArrayList<Point> weights = ronald.tesis.point.Helper.fileToPoints(path, 1);
 		
 		int size = weights.size();
+		ArrayList<WMap> reals = new ArrayList<>();
 		for(int i = 0; i < size; i++)
 		{
 			WMap wreal = new WMap(weights.get(i));
@@ -282,14 +305,28 @@ public class Comparative
 			
 			double ps_real = getPSMap(wreal, phase, sub_ps);
 			double ps_late = getPSMap(wlate, phase, sub_ps);
+			
+			// SAMR
+			// First save the weights finished
+			reals.add(wreal);
+			// Get old weight 
+			double finished = reals.get(Helper.getRandom(0, reals.size() - 1)).getM1();
+			double m1 = SAMR.HP * this._old_map.getValues()[0] + finished * (1 - SAMR.HP); 
+			WMap wsamr= new WMap(m1); 
+			// END SAMR
+			
+			double ps_samr = getPSMap(wsamr, phase, sub_ps);
 			double ps_birch = getPSMap(wbirch, phase, sub_ps);
 			double ps_km = getPSMap(wkm, phase, sub_ps);
+			
 			sum_error_late += Math.abs(ps_real - ps_late);
+			sum_error_samr += Math.abs(ps_real - ps_samr);
 			sum_error_km += Math.abs(ps_real - ps_km);
 			sum_error_birch += Math.abs(ps_real - ps_birch);
 		}
 		
 		this._avg_error_late_maps[job_id][index] = sum_error_late / this._numberOfTasksMap;
+		this._avg_error_samr_maps[job_id][index] = sum_error_samr / this._numberOfTasksMap;
 		this._avg_error_esamr_maps[job_id][index] = sum_error_km / this._numberOfTasksMap;
 		this._avg_error_birch_maps[job_id][index] = sum_error_birch / this._numberOfTasksMap;
 	}
@@ -302,10 +339,11 @@ public class Comparative
 		WReduce wlate = getWeightsReduce(), 
 				wkm = getWeightsReduce(reference_2d, this._centroids_kmeans_reduce), 
 				wbirch = getWeightsReduce(reference_3d, this._centroids_birch_reduce);
-		double sum_error_late = 0, sum_error_km = 0, sum_error_birch = 0; 
+		double sum_error_late = 0, sum_error_samr = 0, sum_error_km = 0, sum_error_birch = 0; 
 		
 		ArrayList<Point> weights = ronald.tesis.point.Helper.fileToPoints(path, 3);
 		int size = weights.size();
+		ArrayList<WReduce> reals = new ArrayList<>();
 		for(int i = 0; i < size; i++)
 		{
 			WReduce wreal = new WReduce(weights.get(i));
@@ -314,14 +352,29 @@ public class Comparative
 			double sub_ps = Helper.getRandom(min_sp, 100) / 100;
 			double ps_real = getPSReduce(wreal, phase, sub_ps);
 			double ps_late = getPSReduce(wlate, phase, sub_ps);
+			
+			// SAMR
+			// First save the weights finished
+			reals.add(wreal);
+			// Get old weight 
+			double finished_r1 = reals.get(Helper.getRandom(0, reals.size() - 1)).getR1();
+			double finished_r2 = reals.get(Helper.getRandom(0, reals.size() - 1)).getR2();
+			double r1 = SAMR.HP * this._old_reduce.getValues()[0] + finished_r1 * (1 - SAMR.HP); 
+			double r2 = SAMR.HP * this._old_reduce.getValues()[1] + finished_r2 * (1 - SAMR.HP); 
+			WReduce wsamr= new WReduce(r1, r2); 
+			// END SAMR
+			
+			double ps_samr = getPSReduce(wsamr, phase, sub_ps);
 			double ps_birch = getPSReduce(wbirch, phase, sub_ps);
 			double ps_km = getPSReduce(wkm, phase, sub_ps);
 			sum_error_late += Math.abs(ps_real - ps_late); 
+			sum_error_samr += Math.abs(ps_samr - ps_late); 
 			sum_error_km += Math.abs(ps_real - ps_km); 
 			sum_error_birch += Math.abs(ps_real - ps_birch);
 		}
 		
 		this._avg_error_late_reduces[job_id][index] = sum_error_late / this._numberOfTasksReduce;
+		this._avg_error_samr_reduces[job_id][index] = sum_error_samr / this._numberOfTasksReduce;
 		this._avg_error_esamr_reduces[job_id][index] = sum_error_km / this._numberOfTasksReduce;
 		this._avg_error_birch_reduces[job_id][index] = sum_error_birch / this._numberOfTasksReduce;
 	}
@@ -353,7 +406,6 @@ public class Comparative
 		return new WMap(centroids[min_index].getValues()[0]);
 	}
 	private static WMap getWeightsMap() { return new WMap(1); }
-	
 	private static WReduce getWeightsReduce(Point p, Point centroids[]) throws Exception
 	{
 		int size = centroids.length, min_index = -1;
@@ -369,6 +421,8 @@ public class Comparative
 	
 	public double getAverageErrorLateMap() { return this._avg_error_late_map; }
 	public double getAverageErrorLateReduce() { return this._avg_error_late_reduce; }
+	public double getAverageErrorSamrMap() { return this._avg_error_samr_map; }
+	public double getAverageErrorSamrReduce() { return this._avg_error_samr_reduce; }
 	public double getAverageErrorEsamrMap() { return this._avg_error_esamr_map; }
 	public double getAverageErrorEsamrReduce() { return this._avg_error_esamr_reduce; }
 	public double getAverageErrorBirchMap() { return this._avg_error_birch_map; }
@@ -388,7 +442,7 @@ public class Comparative
 		for(int i = 0; i < length; i++)
 		{
 			System.out.println("i: " + i);
-			double late_map = 0, late_reduce = 0, esamr_map = 0, esamr_reduce = 0, birch_map = 0, birch_reduce = 0;
+			double late_map = 0, late_reduce = 0, samr_map = 0, samr_reduce = 0, esamr_map = 0, esamr_reduce = 0, birch_map = 0, birch_reduce = 0;
 			long total_time_kmeans_map = 0, total_time_kmeans_reduce = 0, total_time_birch_map = 0, total_time_birch_reduce = 0;
 			for(int j = 0; j < repetitions; j++)
 			{
@@ -402,9 +456,11 @@ public class Comparative
 				comparative.setLReduce(Ls_reduce[i]);
 				comparative.test();
 				late_map +=  comparative.getAverageErrorLateMap();
+				samr_map +=  comparative.getAverageErrorSamrMap();
 				esamr_map +=  comparative.getAverageErrorEsamrMap();
 				birch_map +=  comparative.getAverageErrorBirchMap();
 				late_reduce +=  comparative.getAverageErrorLateReduce();
+				samr_reduce +=  comparative.getAverageErrorSamrReduce();
 				esamr_reduce +=  comparative.getAverageErrorEsamrReduce();
 				birch_reduce +=  comparative.getAverageErrorBirchReduce();
 				
@@ -414,12 +470,14 @@ public class Comparative
 				total_time_birch_reduce += comparative.getTimeBIRCHReduce();
 			}
 			System.out.println();
-			results_map[0][i] = 100 - (late_map / repetitions);
-			results_map[1][i] = 100 - (esamr_map / repetitions);
-			results_map[2][i] = 100 - (birch_map / repetitions);
-			results_reduce[0][i] = 100 - (late_reduce / repetitions);
-			results_reduce[1][i] = 100 - (esamr_reduce / repetitions);
-			results_reduce[2][i] = 100 - (birch_reduce / repetitions);
+			results_map[INDEX_LATE][i] = 100 - (late_map / repetitions);
+			results_map[INDEX_SAMR][i] = 100 - (samr_map / repetitions);
+			results_map[INDEX_EMSAR][i] = 100 - (esamr_map / repetitions);
+			results_map[INDEX_BIRCH][i] = 100 - (birch_map / repetitions);
+			results_reduce[INDEX_LATE][i] = 100 - (late_reduce / repetitions);
+			results_reduce[INDEX_SAMR][i] = 100 - (samr_reduce / repetitions);
+			results_reduce[INDEX_EMSAR][i] = 100 - (esamr_reduce / repetitions);
+			results_reduce[INDEX_BIRCH][i] = 100 - (birch_reduce / repetitions);
 			
 			time_results_map[0][i] = total_time_kmeans_map / repetitions;
 			time_results_map[1][i] = total_time_birch_map / repetitions;

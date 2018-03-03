@@ -22,6 +22,7 @@ public class App
 //		ronald.tesis.generator.Helper.writeWeights(min_id, max_id, number_of_tasks);
 		int repetitions = 10;
 		int historicals[] = new int[]{5, 10, 20, 50, 100, 200, 400, 600, 800, 1000};
+//		int historicals[] = new int[]{5, 10, 20, 50, 100};
 		int historicals_size = historicals.length;
 		int tests[] = new int[historicals_size];
 		Arrays.fill(tests, tests_size);
@@ -59,8 +60,8 @@ public class App
 		int number_of_tasks = 5000;
 //		ronald.tesis.generator.Helper.writeRandomJobs(min_id, max_id, number_of_tasks, min_job_id, max_job_id);
 		int repetitions = 10;
-//		int historicals[] = new int[]{20, 50, 100, 200, 400, 600, 800, 1000};
-		int historicals[] = new int[]{20, 40, 60, 80, 100, 150, 200, 300, 500};
+		int historicals[] = new int[]{20, 50, 100, 200, 300, 400, 500};
+//		int historicals[] = new int[]{20};
 		int historicals_size = historicals.length;
 		int tests[] = new int[historicals_size];
 		Arrays.fill(tests, tests_size);
@@ -94,10 +95,10 @@ public class App
 		{
 			System.out.println("Processing ...");
 			String id = Helper.getUniqueId();
-			System.out.println("ID: " + id);
 			App app = new App();
-//			app.test("test_" + id);
-			app.testRandoms("random4_" + id);
+//			app.test("with_samr_" + id);
+			app.testRandoms("rwiths_" + id);
+			System.out.println("ID: " + id);
 			System.out.println("Finished ...");
 		}
 		catch(Exception e) { e.printStackTrace(); }
